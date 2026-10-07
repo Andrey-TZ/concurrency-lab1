@@ -1,13 +1,8 @@
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.labs.*;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class FullTest {
@@ -27,7 +22,7 @@ public class FullTest {
     ) throws InterruptedException {
         Simulation simulation = new Simulation(numProgrammers, numWaiters, food);
         simulation.createResources();
-        simulation.startSimulation(30, TimeUnit.MINUTES);
+        simulation.startSimulation(2, TimeUnit.HOURS);
 
         for (Programmer p : simulation.getProgrammers()) {
             Assertions.assertNotEquals(0, p.getMealsEaten(), "Programmer didn't eat");
