@@ -1,18 +1,26 @@
 package org.labs;
 
+import java.util.concurrent.CountDownLatch;
+
 public class Programmer implements Runnable{
     private final int id;
     private final Spoon leftSpoon;
     private final Spoon rightSpoon;
     private final Restaurant restaurant;
+    private final CountDownLatch finished;
 
     private int mealsEaten = 0;
 
     public Programmer(int id, Spoon leftSpoon, Spoon rightSpoon, Restaurant restaurant) {
+        this(id, leftSpoon, rightSpoon, restaurant, new CountDownLatch(1));
+    }
+
+    public Programmer(int id, Spoon leftSpoon, Spoon rightSpoon, Restaurant restaurant, CountDownLatch finished) {
         this.id = id;
         this.leftSpoon = leftSpoon;
         this.rightSpoon = rightSpoon;
         this.restaurant = restaurant;
+        this.finished = finished;
     }
 
     @Override
@@ -40,19 +48,21 @@ public class Programmer implements Runnable{
 
             }
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            Thread.currentThread().interrupt();
+        } finally {
+            finished.countDown();
         }
 
     }
 
     private void think() throws InterruptedException {
-        Thread.sleep(100);
+        Thread.sleep(2);
     }
 
     private void eat() throws InterruptedException {
         mealsEaten++;
         //System.out.printf("Программист %d съел %d порцию \n", id, mealsEaten);
-        Thread.sleep(100);
+        Thread.sleep(2);
     }
 
     private void takeSpoons() {

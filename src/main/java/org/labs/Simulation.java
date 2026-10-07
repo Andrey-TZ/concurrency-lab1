@@ -11,6 +11,7 @@ public class Simulation {
     private final Restaurant restaurant;
     private ExecutorService executorService;
     private final List<Programmer> programmers;
+    private final CountDownLatch programmersFinished;
 
 
     public Simulation(
@@ -23,7 +24,8 @@ public class Simulation {
         this.food = food;
         restaurant = new Restaurant(food);
         programmers = new ArrayList<>(numProgrammers);
-        executorService = Executors.newFixedThreadPool(numProgrammers + numWaiters + 1);
+        programmersFinished = new CountDownLatch(numProgrammers);
+        executorService = Executors.newFixedThreadPool(numProgrammers + numWaiters);
     }
 
     public void createResources() {
@@ -41,33 +43,34 @@ public class Simulation {
             Spoon leftSpoon = spoons[i];
             Spoon rightSpoon = spoons[(i + 1) % numProgrammers];
 
-            Programmer p = new Programmer(i, leftSpoon, rightSpoon, restaurant);
+            Programmer p = new Programmer(i, leftSpoon, rightSpoon, restaurant, programmersFinished);
             programmers.add(p);
             executorService.submit(p);
         }
     }
 
     public void startSimulation(long timeout, TimeUnit unit) throws InterruptedException {
-
-        Future<?> restaurantTask = executorService.submit(() -> {
-            restaurant.open();
-            try {
-                restaurant.awaitEmptyPot();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-            restaurant.closeRestaurant();
-        });
-
+        restaurant.open();
         try {
-            restaurantTask.get(timeout, unit);
-        } catch (TimeoutException e) {
-            System.out.println("Restaurant did not finish in timeout");
-            restaurantTask.cancel(true);
-        } catch (ExecutionException e) {
-            throw new RuntimeException(e);
-        } finally {
+            if (!programmersFinished.await(timeout, unit)) {
+                System.out.println("Simulation did not finish in timeout");
+                executorService.shutdownNow();
+                if (!executorService.awaitTermination(timeout, unit)) {
+                    System.out.println("Workers did not stop after interruption");
+                }
+                return;
+            }
+
+            restaurant.stopWaiters(numWaiters);
+            executorService.shutdown();
+            if (!executorService.awaitTermination(timeout, unit)) {
+                System.out.println("Workers did not stop in timeout");
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
             executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+            throw e;
         }
     }
 

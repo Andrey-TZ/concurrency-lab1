@@ -1,11 +1,28 @@
 package org.labs;
 
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Order {
-    private CountDownLatch lock = new CountDownLatch(1);
-    private Boolean isRefilled;
+    private static final Order STOP = new Order(true);
+    private final CountDownLatch lock = new CountDownLatch(1);
+    private final boolean stopSignal;
+    private volatile boolean isRefilled;
+
+    public Order() {
+        this(false);
+    }
+
+    private Order(boolean stopSignal) {
+        this.stopSignal = stopSignal;
+    }
+
+    public static Order stopSignal() {
+        return STOP;
+    }
+
+    public boolean isStopSignal() {
+        return stopSignal;
+    }
 
 
     public void place() throws InterruptedException {

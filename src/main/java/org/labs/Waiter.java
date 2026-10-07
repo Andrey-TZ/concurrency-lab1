@@ -1,9 +1,6 @@
 package org.labs;
 
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-public class Waiter implements Runnable{
+public class Waiter implements Runnable {
     private final Restaurant restaurant;
 
     public Waiter(Restaurant restaurant) {
@@ -14,22 +11,15 @@ public class Waiter implements Runnable{
     public void run() {
         try {
             restaurant.awaitOpening();
-            while (!restaurant.isStopped().get()) {
-                var order = restaurant.takeNextOrder();
-
-                boolean hasFood = restaurant.tryTakePortion();
-                if (!hasFood) {
-                    restaurant.emptyPot();
+            while (true) {
+                Order order = restaurant.takeNextOrder();
+                if (order.isStopSignal()) {
+                    return;
                 }
-
-                order.fulfill(hasFood);
+                restaurant.fulfill(order);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
     }
-
-
-
-
 }
