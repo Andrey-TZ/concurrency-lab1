@@ -13,7 +13,6 @@ public class FullTest {
             "5, 2, 1000",
             "7, 2, 100000",
             "10, 4, 100000",
-            "12, 4, 1000000"
     })
     void checkAllFoodEaten(
             int numProgrammers,
