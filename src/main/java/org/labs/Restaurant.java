@@ -1,18 +1,25 @@
 package org.labs;
 
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Comparator;
+import java.util.PriorityQueue;
+import java.util.Queue;
 
 public class Restaurant {
-    private final AtomicInteger totalFood;
-    private final BlockingQueue<Order> orders = new LinkedBlockingQueue<>();
+    private int remainingFood;
+    private final Queue<Order> orders = new PriorityQueue<>(
+            Comparator.comparingInt(Order::getMealsEaten)
+                    .thenComparingLong(Order::getSequence));
     private final CountDownLatch start = new CountDownLatch(1);
     private boolean acceptingOrders = true;
+    private int waitingStopSignals;
+    private long nextOrderSequence;
 
     public Restaurant(int food) {
-        totalFood = new AtomicInteger(food);
+        if (food < 0) {
+            throw new IllegalArgumentException("Food count cannot be negative");
+        }
+        remainingFood = food;
         if (food == 0) {
             acceptingOrders = false;
         }
@@ -28,37 +35,38 @@ public class Restaurant {
 
     public synchronized void placeOrder(Order order) throws InterruptedException {
         if (acceptingOrders) {
-            orders.put(order);
+            order.setSequence(nextOrderSequence++);
+            orders.add(order);
+            notifyAll();
         } else {
             order.fulfill(false);
         }
     }
 
-    public Order takeNextOrder() throws InterruptedException {
-        return orders.take();
-    }
+    public synchronized Order takeNextOrder() throws InterruptedException {
+        while (orders.isEmpty() && waitingStopSignals == 0) {
+            wait();
+        }
 
-    public void fulfill(Order order) {
-        int remaining = totalFood.decrementAndGet();
-        if (remaining >= 0) {
-            if (remaining == 0) {
-                synchronized (this) {
-                    acceptingOrders = false;
-                }
-            }
-            order.fulfill(true);
-        } else {
-            totalFood.incrementAndGet();
-            synchronized (this) {
+        if (orders.isEmpty()) {
+            waitingStopSignals--;
+            return Order.stopSignal();
+        }
+
+        Order order = orders.remove();
+        boolean refilled = remainingFood > 0;
+        if (refilled) {
+            remainingFood--;
+            if (remainingFood == 0) {
                 acceptingOrders = false;
             }
-            order.fulfill(false);
         }
+        order.fulfill(refilled);
+        return order;
     }
 
-    public void stopWaiters(int count) throws InterruptedException {
-        for (int i = 0; i < count; i++) {
-            orders.put(Order.stopSignal());
-        }
+    public synchronized void stopWaiters(int count) {
+        waitingStopSignals += count;
+        notifyAll();
     }
 }

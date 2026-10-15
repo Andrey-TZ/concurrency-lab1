@@ -2,85 +2,93 @@ package org.labs;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class Simulation {
     private final int numProgrammers;
     private final int numWaiters;
-    private final int food;
     private final Restaurant restaurant;
-    private ExecutorService executorService;
+    private final ExecutorService programmerExecutor;
+    private final ExecutorService waiterExecutor;
     private final List<Programmer> programmers;
-    private final CountDownLatch programmersFinished;
 
+    public Simulation(int numProgrammers, int numWaiters, int food) {
+        if (numProgrammers < 2) {
+            throw new IllegalArgumentException("At least two programmers are required");
+        }
+        if (numWaiters < 1) {
+            throw new IllegalArgumentException("At least one waiter is required");
+        }
 
-    public Simulation(
-            int numProgrammers,
-            int numWaiters,
-            int food
-    ) {
         this.numProgrammers = numProgrammers;
         this.numWaiters = numWaiters;
-        this.food = food;
         restaurant = new Restaurant(food);
         programmers = new ArrayList<>(numProgrammers);
-        programmersFinished = new CountDownLatch(numProgrammers);
-        executorService = Executors.newFixedThreadPool(numProgrammers + numWaiters);
+        int workerLimit = Math.max(1, Runtime.getRuntime().availableProcessors());
+        programmerExecutor = Executors.newFixedThreadPool(Math.min(numProgrammers, workerLimit));
+        waiterExecutor = Executors.newFixedThreadPool(Math.min(numWaiters, workerLimit));
     }
 
     public void createResources() {
-
         Spoon[] spoons = new Spoon[numProgrammers];
         for (int i = 0; i < numProgrammers; i++) {
             spoons[i] = new Spoon();
         }
 
         for (int i = 0; i < numWaiters; i++) {
-            executorService.submit(new Waiter(restaurant));
+            waiterExecutor.submit(new Waiter(restaurant));
         }
 
         for (int i = 0; i < numProgrammers; i++) {
-            Spoon leftSpoon = spoons[i];
-            Spoon rightSpoon = spoons[(i + 1) % numProgrammers];
-
-            Programmer p = new Programmer(i, leftSpoon, rightSpoon, restaurant, programmersFinished);
-            programmers.add(p);
-            executorService.submit(p);
+            Programmer programmer = new Programmer(
+                    i, spoons[i], spoons[(i + 1) % numProgrammers], restaurant);
+            programmers.add(programmer);
+            programmerExecutor.submit(programmer);
         }
     }
 
     public void startSimulation(long timeout, TimeUnit unit) throws InterruptedException {
         restaurant.open();
         try {
-            if (!programmersFinished.await(timeout, unit)) {
+            programmerExecutor.shutdown();
+            if (!programmerExecutor.awaitTermination(timeout, unit)) {
                 System.out.println("Simulation did not finish in timeout");
-                executorService.shutdownNow();
-                if (!executorService.awaitTermination(timeout, unit)) {
-                    System.out.println("Workers did not stop after interruption");
-                }
+                programmerExecutor.shutdownNow();
+                waiterExecutor.shutdownNow();
+                awaitWorkerTermination(timeout, unit);
                 return;
             }
 
             restaurant.stopWaiters(numWaiters);
-            executorService.shutdown();
-            if (!executorService.awaitTermination(timeout, unit)) {
+            waiterExecutor.shutdown();
+            if (!awaitWorkerTermination(timeout, unit)) {
                 System.out.println("Workers did not stop in timeout");
-                executorService.shutdownNow();
+                programmerExecutor.shutdownNow();
+                waiterExecutor.shutdownNow();
             }
         } catch (InterruptedException e) {
-            executorService.shutdownNow();
+            programmerExecutor.shutdownNow();
+            waiterExecutor.shutdownNow();
             Thread.currentThread().interrupt();
             throw e;
         }
     }
 
+    private boolean awaitWorkerTermination(long timeout, TimeUnit unit) throws InterruptedException {
+        boolean programmersStopped = programmerExecutor.awaitTermination(timeout, unit);
+        boolean waitersStopped = waiterExecutor.awaitTermination(timeout, unit);
+        return programmersStopped && waitersStopped;
+    }
+
     public long getTotalEaten() {
-        int totalEaten = 0;
-        for (Programmer p : programmers) {
-            totalEaten += p.getMealsEaten();
-            System.out.println("Программист " + p.getId() + " съел " + p.getMealsEaten() + " порций");
+        long totalEaten = 0;
+        for (Programmer programmer : programmers) {
+            totalEaten += programmer.getMealsEaten();
+            System.out.println("Программист " + programmer.getId()
+                    + " съел " + programmer.getMealsEaten() + " порций");
         }
-//        System.out.println("Всего порций " + totalEaten);
         return totalEaten;
     }
 

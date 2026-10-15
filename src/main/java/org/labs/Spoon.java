@@ -3,7 +3,7 @@ package org.labs;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Spoon {
-    ReentrantLock lock = new ReentrantLock(true);
+    private final ReentrantLock lock = new ReentrantLock(true);
 
     public void pickUp() {
         lock.lock();

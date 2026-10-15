@@ -16,7 +16,6 @@ public class Waiter implements Runnable {
                 if (order.isStopSignal()) {
                     return;
                 }
-                restaurant.fulfill(order);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
