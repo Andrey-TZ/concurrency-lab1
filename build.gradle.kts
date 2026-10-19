@@ -14,6 +14,10 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
 }
 
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(23)
+}
+
 tasks.test {
     useJUnitPlatform()
 }
